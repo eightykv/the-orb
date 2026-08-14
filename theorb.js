@@ -8,11 +8,12 @@ let width, height;
 let posX, posY;
 
 const skyrim = new Hardware("Skyrim Special Edition");
-let toggle = ['w', 'a', 's', 'd'];
-let send    = ['space', 'tab', 'alt', 'e', 'r', 'c'];
-let look    = ['>', '<', '^', '.'];
-let mouse = ["click", "rclick"];
+let toggle  = ['w', 'a', 's', 'd'];                     // hold down basic movement keys
+let send    = ['space', 'tab', 'lAlt', 'e', 'r', 'c'];   // one-offs
+let look    = ['>', '<', '^', '.'];                     // look directions
+let mouse   = ["click", "rclick"];                      // for now, can only do short click
 
+// whether this movement is happening
 let toggle_keys = { 'w': false, 'a': false, 's': false, 'd': false };
 
 SerialPort.list().then(function (ports) {
@@ -20,7 +21,7 @@ SerialPort.list().then(function (ports) {
     if (port.path.match(/COM[0-9]+/) && !sp_connected) {
       sp_connected = true;
       console.log("Opening port " + port.path);
-      serialport = new SerialPort({ path: port.path, baudRate: 9600 });
+      serialport = new SerialPort({ path: port.path, baudRate: 115200 });
       parser = new ReadlineParser();
       serialport.pipe(parser);
       parser.on('data', arduinoIn);
@@ -35,6 +36,7 @@ async function begin() {
   let view = skyrim.workwindow.getView();
   width = view.width;
   height = view.height;
+  // track where the mouse currently is. Move to the center of the screen
   posX = width / 2;
   posY = height / 2;
   await skyrim.mouse.moveTo(posX, posY);
@@ -43,15 +45,19 @@ async function begin() {
 
 async function arduinoIn(value) {
   value = value.trim();
-  console.log(value);
+  //console.log(value);
 
+  // only send keys if we're focused on the Skyrim window
   if (skyrim.workwindow.isOpen() && skyrim.workwindow.isForeground()) {
-    if (toggle.indexOf(value) > -1) {
-      toggle_keys[value] = !toggle_keys[value];
-      await skyrim.keyboard.toggleKey(value, keys[value]);
-    }
-    else if (send.indexOf(value) > -1) {
+    if (send.indexOf(value) > -1) {
       await skyrim.keyboard.sendKey(value, 50);
+      console.log("sending " + value);
+    }
+    else if (toggle.indexOf(value[0]) > -1) {
+      let key = value[0];
+      toggle_keys[key] = value[1] == 1;
+      await skyrim.keyboard.toggleKey(key, toggle_keys[key]);
+      console.log("toggle " + key + " " + (toggle_keys[key] ? "on" : "off"));
     }
     else if (look.indexOf(value) > -1) {
       switch (value) {
@@ -62,25 +68,32 @@ async function arduinoIn(value) {
           await skyrim.mouse.moveTo(--posX, posY);
           break;
         case '^':
-          await skyrim.mouse.moveTo(posX, ++posY);
+          await skyrim.mouse.moveTo(posX, posY += 2);
           break;
         case '.':
-          await skyrim.mouse.moveTo(posX, --posY);
+          await skyrim.mouse.moveTo(posX, posY -= 2);
           break;
       }
     }
     else if (mouse.indexOf(value) > -1) {
       if (value === "click") {
         await skyrim.mouse.click();
+        console.log("click");
       }
       else if (value === "rclick") {
         await skyrim.mouse.click("right");
+        console.log("right click");
       }
     }
     else if (value[0] === 'z') {
       let length = parseInt(value[1]);
       // estimating that a full shout takes one second of keypress; may tweak once I can test this in-game
+      // I think this pauses execution of all other key presses until it's done
       await skyrim.keyboard.sendKey(value, 20 + (500 * length));
+      console.log('z');
+    }
+    else {
+      console.log(value);
     }
   }
 }
