@@ -1,4 +1,22 @@
 void processFB(float quatJ) {
+  if (camera_mode == 1) {
+    if (moving_fb != 0) {
+      Serial.println("s0");
+      Serial.println("w0");
+      moving_fb = 0;
+    }
+
+    if (quatJ > look_threshold_ud || quatJ < (0 - look_threshold_ud)) {
+      looking_ud = 0;
+    }
+    else if (quatJ > 0 && quatJ < look_threshold_ud) {
+      looking_ud = 1;
+    }
+    else if (quatJ < 0 && quatJ > 0 - look_threshold_ud) {
+      looking_ud = -1;
+    }
+    return;
+  }
   if (quatJ > 0) {
     // if we're past the threshold and not moving yet, start moving
     if (quatJ < f_threshold && moving_fb != 1) {

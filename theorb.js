@@ -9,7 +9,7 @@ let posX, posY;
 
 const skyrim = new Hardware("Skyrim Special Edition");
 let toggle  = ['w', 'a', 's', 'd'];                     // hold down basic movement keys
-let send    = ['space', 'tab', 'lAlt', 'e', 'r', 'c'];   // one-offs
+let send    = ['space', 'tab', 'lAlt', 'lCtrl', 'e', 'r'];   // one-offs
 let look    = ['>', '<', '^', '.'];                     // look directions
 let mouse   = ["click", "rclick"];                      // for now, can only do short click
 
@@ -45,7 +45,7 @@ async function begin() {
 
 async function arduinoIn(value) {
   value = value.trim();
-  //console.log(value);
+  console.log(value);
 
   // only send keys if we're focused on the Skyrim window
   if (skyrim.workwindow.isOpen() && skyrim.workwindow.isForeground()) {
@@ -68,29 +68,30 @@ async function arduinoIn(value) {
           await skyrim.mouse.moveTo(--posX, posY);
           break;
         case '^':
-          await skyrim.mouse.moveTo(posX, posY += 2);
+          await skyrim.mouse.moveTo(posX, ++posY);
           break;
         case '.':
-          await skyrim.mouse.moveTo(posX, posY -= 2);
+          await skyrim.mouse.moveTo(posX, --posY);
           break;
       }
     }
     else if (mouse.indexOf(value) > -1) {
+      await skyrim.mouse.moveTo(posX, posY);
       if (value === "click") {
-        await skyrim.mouse.click();
+        await skyrim.mouse.click("left", 50);
         console.log("click");
       }
       else if (value === "rclick") {
-        await skyrim.mouse.click("right");
+        await skyrim.mouse.click("right", 50);
         console.log("right click");
       }
     }
     else if (value[0] === 'z') {
-      let length = parseInt(value[1]);
+      //let length = parseInt(value[1]);
       // estimating that a full shout takes one second of keypress; may tweak once I can test this in-game
       // I think this pauses execution of all other key presses until it's done
-      await skyrim.keyboard.sendKey(value, 20 + (500 * length));
-      console.log('z');
+      //await skyrim.keyboard.sendKey(value, 20 + (500 * length));
+      //console.log('z');
     }
     else {
       console.log(value);
