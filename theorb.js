@@ -50,7 +50,7 @@ async function arduinoIn(value) {
   // only send keys if we're focused on the Skyrim window
   if (skyrim.workwindow.isOpen() && skyrim.workwindow.isForeground()) {
     if (send.indexOf(value) > -1) {
-      await skyrim.keyboard.sendKey(value, 50);
+      await skyrim.keyboard.sendKey(value, 100);
       console.log("sending " + value);
     }
     else if (toggle.indexOf(value[0]) > -1) {
@@ -78,12 +78,10 @@ async function arduinoIn(value) {
     else if (mouse.indexOf(value) > -1) {
       await skyrim.mouse.moveTo(posX, posY);
       if (value === "click") {
-        await skyrim.mouse.click("left", 50);
-        console.log("click");
+        await skyrim.mouse.click("left", 100);
       }
       else if (value === "rclick") {
-        await skyrim.mouse.click("right", 50);
-        console.log("right click");
+        await skyrim.mouse.click("right", 100);
       }
     }
     else if (value[0] === 'z') {

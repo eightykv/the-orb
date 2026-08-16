@@ -20,14 +20,13 @@ void processFB(float quatJ) {
   if (quatJ > 0) {
     // if we're past the threshold and not moving yet, start moving
     if (quatJ < f_threshold && moving_fb != 1) {
-      if (moving_fb == -1) {
-        Serial.println("s0");
-      }
+      Serial.println("s0");
       Serial.println("w1");
       moving_fb = 1;
     }
     // if we're below the threshold and are moving, stop
     if (quatJ >= f_threshold && moving_fb != 0) {
+      Serial.println("s0");
       Serial.println("w0");
       moving_fb = 0;
     }
@@ -45,14 +44,13 @@ void processFB(float quatJ) {
     // if we're past the threshold and not moving yet, start moving
     if (quatJ > b_threshold && moving_fb != -1) {
       Serial.println("s1");
-      if (moving_fb == 1) {
-        Serial.println("w0");
-      }
+      Serial.println("w0");
       moving_fb = -1;
     }
     // if we're below the threshold and are moving, stop
     if (quatJ <= b_threshold && moving_fb != 0) {
       Serial.println("s0");
+      Serial.println("w0");
       moving_fb = 0;
     }
   }
@@ -82,6 +80,11 @@ void processLR(float quatJ, float quatK) {
     Serial.println("a0");
     moving_lr = 0;
   }
+
+  if (quatK > lr_threshold || quatK < 0 - lr_threshold) {
+    Serial.println("a0");
+    Serial.println("d0");
+  }
 }
 
 void processLook(float quatJ, float quatI) {
@@ -89,13 +92,19 @@ void processLook(float quatJ, float quatI) {
     quatI = 0 - quatI;
   }
   
-  if (quatI < look_threshold && quatI > 0 - look_threshold) {
+  if (quatI < look_threshold_slow && quatI > 0 - look_threshold_slow) {
     looking_lr = 0;
   }
-  else if (quatI < 0 - look_threshold && looking_lr != 1) {
-    looking_lr = 1;
+  else if (quatI < 0 - look_threshold_fast) {
+      looking_lr = 2;
   }
-  else if (quatI > look_threshold && looking_lr != -1) {
+  else if (quatI < 0 - look_threshold_slow) {
+      looking_lr = 1;
+  }
+  else if (quatI > look_threshold_fast) {
+    looking_lr = -2;
+  }
+  else if (quatI > look_threshold_slow) {
     looking_lr = -1;
   }
 }

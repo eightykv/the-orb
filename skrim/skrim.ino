@@ -8,7 +8,9 @@ Adafruit_MPR121 mpr = Adafruit_MPR121();
 uint16_t last_touched = 0;
 uint16_t curr_touched = 0;
 long sneak_clock = 0;
-int sneak_threshold = 500;
+int sneak_threshold = 750;
+long shout_clock = 0;
+bool jumping = false;
 #ifndef _BV
 #define _BV(bit) (1 << (bit))
 #endif
@@ -18,22 +20,21 @@ BNO08x bno;
 #define BNO08X_ADDR 0x4B
 #define BNO08X_INT  -1
 #define BNO08X_RST  -1
-float f_threshold = 0.98;
-float b_threshold = -0.96;
-float sprint_threshold = 0.85;
-float lr_threshold = 0.2;
-float look_threshold = 0.2;
-float look_threshold_ud = 0.95;
+float f_threshold = 0.96;
+float b_threshold = -0.90;
+float sprint_threshold = 0.8;
+float lr_threshold = 0.3;
+float look_threshold_slow = 0.3;
+float look_threshold_fast = 0.3;
+float look_threshold_ud = 0.97;
 float last_z_accel = -9.8;
 
 // Piezo helper vars
-int piezos[3] = {A0, A1, A3};
-int shout_count;
-int knock_threshold = 100;
+int piezos[2] = {A0, A1};
+int knock_threshold = 200;
 
 // state vars
 int camera_mode = 0;
-bool jump_ready = false;
 int moving_fb   = 0;
 int moving_lr   = 0;
 int sprinting   = 0;
@@ -41,13 +42,19 @@ int looking_lr  = 0;
 int looking_ud  = 0;
 
 // timing vars
-int ud_clock_delay = 40;
+int lr_clock_delay_slow = 10;
+int lr_clock_delay_fast = 10;
+int ud_clock_delay = 50;
 long lr_clock;
 long ud_clock;
 
 long piezo_clock[3];
 long shout_delay = 500;
 long piezo_debounce = 200;
+long e_clock;
+long btn_debounce = 250;
+long ctrl_clock;
+long tab_clock;
 
 // temp
 int last_knock = true;
@@ -69,10 +76,12 @@ void setup() {
   Serial.println("BNO08x found!");
   setReports();
   
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 2; i++) {
     piezo_clock[i] = millis();
   }
-  shout_count = 0;
+  e_clock = millis();
+  ctrl_clock = millis();
+  tab_clock = millis();
   
   delay(1000);
 }
@@ -110,8 +119,10 @@ void processMPR() {
       // if both eyes, open the menu
       if ((i == 0 || i == 1) &&
           (curr_touched & _BV(0)) &&
-          (curr_touched & _BV(1))) {
+          (curr_touched & _BV(1)) &&
+          millis() - tab_clock >= btn_debounce) {
         Serial.println("tab");
+        tab_clock = millis();
       }
       // yellow
       else if (i == 0) {
@@ -121,15 +132,19 @@ void processMPR() {
       else if (i == 1) {
         camera_mode = 1;
       }
-      // blue/white
-      else if (i == 2 || i == 3) {
-        jump_ready = true;
+      // white
+      else if (i == 2) {
+        shout_clock = millis();
+      }
+      else if (i == 3) {
+        jumping = false;
       }
     }
     if (!(curr_touched & _BV(i)) && (last_touched & _BV(i)) ) {
-      if (i == 0) {
-        if (millis() - sneak_clock < sneak_threshold) {
+      if (i == 0 && !(curr_touched & _BV(1))) {
+        if (millis() - sneak_clock < sneak_threshold && millis() - ctrl_clock >= btn_debounce) {
           Serial.println("lCtrl");
+          ctrl_clock = millis();
         }
         else {
           Serial.println('r');
@@ -139,13 +154,16 @@ void processMPR() {
         camera_mode = 0;
         looking_ud = 0;
       }
-      else if (i == 2 || i == 3) {
-        if (jump_ready && 
-            !(curr_touched & _BV(2)) &&
-            !(curr_touched & _BV(3))) {
-          Serial.println("space");
-          jump_ready = false;
-        }
+      else if (i == 2) {
+        long shout_diff = millis() - shout_clock;
+        int shout_val = shout_diff/500;
+        shout_val = max(shout_val, 3);
+        //Serial.print('z');
+        //Serial.println(shout_val);
+      }
+      else if (i == 3) {
+        Serial.println("space");
+        jumping = true;
       }
     }
   }
@@ -168,13 +186,20 @@ void processBNO() {
     }
     // send looking data every moving_delay ms
     if (looking_lr != 0) {
-      if (looking_lr == 1) {
-        Serial.println('>');
+      if (looking_lr > 0) {
+        if ((looking_lr == 1 && (millis() - lr_clock) >= lr_clock_delay_slow) ||
+            (looking_lr == 2 && (millis() - lr_clock) >= lr_clock_delay_fast)) {
+          Serial.println('>');
+          lr_clock = millis();
+        }
       }
       else {
-        Serial.println('<');
+        if ((looking_lr == -1 && (millis() - lr_clock) >= lr_clock_delay_slow) ||
+            (looking_lr == -2 && (millis() - lr_clock) >= lr_clock_delay_fast)) {
+          Serial.println('<');
+          lr_clock = millis();
+        }
       }
-      lr_clock = millis();
     }
     if (looking_ud != 0 && (millis() - ud_clock) >= ud_clock_delay) {
       if (looking_ud == 1) {
@@ -188,15 +213,16 @@ void processBNO() {
   }
   if (bno.getSensorEventID() == SENSOR_REPORTID_ACCELEROMETER) {
     float z_accel = bno.getAccelZ();
-    if (z_accel < -15.0 && last_z_accel > -15.0) {
+    if (z_accel < -18.0 && last_z_accel > -18.0 && !jumping && (millis() - e_clock >= btn_debounce)) {
       Serial.println('e');
+      e_clock = millis();
     }
     last_z_accel = z_accel;
   }
 }
 
 void processPiezos() {
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 2; i++) {
     int knock = analogRead(piezos[i]);
     if (knock > knock_threshold && (millis() - piezo_clock[i]) > piezo_debounce) {
       if (i == 0) {
@@ -205,19 +231,7 @@ void processPiezos() {
       else if (i == 1) {
         Serial.println("rclick");
       }
-      // decided to use MPR for shout instead
-      /*else {
-        Serial.println("here");
-        shout_count++;
-      }*/
       piezo_clock[i] = millis();
     }
   }
-  /*
-  if (shout_count > 0 && millis() - piezo_clock[2] > shout_delay) {
-    Serial.println(shout_count);
-    shout_count = min(3, shout_count);
-    Serial.print('z'); Serial.println(shout_count - 1);
-    shout_count = 0;
-  }*/
 }
