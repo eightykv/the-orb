@@ -24,10 +24,10 @@ float f_threshold = 0.96;
 float b_threshold = -0.90;
 float sprint_threshold = 0.8;
 float lr_threshold = 0.3;
-float look_threshold_slow = 0.3;
-float look_threshold_fast = 0.3;
+float look_threshold_lr = 0.3;
 float look_threshold_ud = 0.97;
 float last_z_accel = -9.8;
+float last_y_accel = 0;
 
 // Piezo helper vars
 int piezos[2] = {A0, A1};
@@ -42,22 +42,23 @@ int looking_lr  = 0;
 int looking_ud  = 0;
 
 // timing vars
-int lr_clock_delay_slow = 10;
-int lr_clock_delay_fast = 10;
-int ud_clock_delay = 50;
+int lr_clock_delay = 10;
+int lr_clock_delay_slow = 100;
+int ud_clock_delay = 100;
 long lr_clock;
 long ud_clock;
 
-long piezo_clock[3];
+long piezo_clock[2];
+long any_piezo_clock;
 long shout_delay = 500;
+long jump_delay = 750;
 long piezo_debounce = 200;
+long btn_debounce = 500;
 long e_clock;
-long btn_debounce = 250;
+long quicksave_clock;
 long ctrl_clock;
 long tab_clock;
-
-// temp
-int last_knock = true;
+long jump_clock;
 
 void setup() {
   pinMode(2, INPUT_PULLUP);
@@ -79,9 +80,11 @@ void setup() {
   for (int i = 0; i < 2; i++) {
     piezo_clock[i] = millis();
   }
+  any_piezo_clock = millis();
   e_clock = millis();
   ctrl_clock = millis();
   tab_clock = millis();
+  quicksave_clock = millis();
   
   delay(1000);
 }
@@ -161,9 +164,10 @@ void processMPR() {
         //Serial.print('z');
         //Serial.println(shout_val);
       }
-      else if (i == 3) {
+      else if (i == 3 && !jumping) {
         Serial.println("space");
         jumping = true;
+        jump_clock = millis();
       }
     }
   }
@@ -187,15 +191,15 @@ void processBNO() {
     // send looking data every moving_delay ms
     if (looking_lr != 0) {
       if (looking_lr > 0) {
-        if ((looking_lr == 1 && (millis() - lr_clock) >= lr_clock_delay_slow) ||
-            (looking_lr == 2 && (millis() - lr_clock) >= lr_clock_delay_fast)) {
+        if ((looking_lr == 1 && (millis() - lr_clock) >= lr_clock_delay) ||
+            (looking_lr == 2 && (millis() - lr_clock) >= lr_clock_delay_slow)) {
           Serial.println('>');
           lr_clock = millis();
         }
       }
       else {
-        if ((looking_lr == -1 && (millis() - lr_clock) >= lr_clock_delay_slow) ||
-            (looking_lr == -2 && (millis() - lr_clock) >= lr_clock_delay_fast)) {
+        if ((looking_lr == -1 && (millis() - lr_clock) >= lr_clock_delay) ||
+            (looking_lr == -2 && (millis() - lr_clock) >= lr_clock_delay_slow)) {
           Serial.println('<');
           lr_clock = millis();
         }
@@ -213,18 +217,34 @@ void processBNO() {
   }
   if (bno.getSensorEventID() == SENSOR_REPORTID_ACCELEROMETER) {
     float z_accel = bno.getAccelZ();
-    if (z_accel < -18.0 && last_z_accel > -18.0 && !jumping && (millis() - e_clock >= btn_debounce)) {
+    float y_accel = bno.getAccelY();
+    //Serial.println(y_accel);
+    
+    if (z_accel < -18.0 && last_z_accel > -18.0 && 
+        (millis() - jump_clock >= jump_delay) && 
+        (millis() - e_clock >= btn_debounce)) {
       Serial.println('e');
       e_clock = millis();
     }
     last_z_accel = z_accel;
+    
+    if (y_accel < -7.0 && last_y_accel > -7.0 && 
+        (millis() - quicksave_clock >= btn_debounce) &&
+        (millis() - jump_clock >= jump_delay) &&
+        (millis() - any_piezo_clock >= btn_debounce)) {
+      Serial.println("escape");
+      quicksave_clock = millis();
+    }
+    last_y_accel = y_accel;
   }
 }
 
 void processPiezos() {
   for (int i = 0; i < 2; i++) {
     int knock = analogRead(piezos[i]);
-    if (knock > knock_threshold && (millis() - piezo_clock[i]) > piezo_debounce) {
+    if (knock > knock_threshold && 
+        (millis() - piezo_clock[i] > piezo_debounce) &&
+        (millis() - jump_clock >= jump_delay)) {
       if (i == 0) {
         Serial.println("click");
       }
@@ -232,6 +252,7 @@ void processPiezos() {
         Serial.println("rclick");
       }
       piezo_clock[i] = millis();
+      any_piezo_clock = millis();
     }
   }
 }

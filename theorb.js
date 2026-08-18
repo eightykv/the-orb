@@ -9,7 +9,7 @@ let posX, posY;
 
 const skyrim = new Hardware("Skyrim Special Edition");
 let toggle  = ['w', 'a', 's', 'd'];                     // hold down basic movement keys
-let send    = ['space', 'tab', 'lAlt', 'lCtrl', 'e', 'r'];   // one-offs
+let send    = ['space', 'tab', 'lAlt', 'lCtrl', 'escape', 'e', 'r'];   // one-offs
 let look    = ['>', '<', '^', '.'];                     // look directions
 let mouse   = ["click", "rclick"];                      // for now, can only do short click
 
@@ -50,6 +50,11 @@ async function arduinoIn(value) {
   // only send keys if we're focused on the Skyrim window
   if (skyrim.workwindow.isOpen() && skyrim.workwindow.isForeground()) {
     if (send.indexOf(value) > -1) {
+      if (value == "escape") {
+        posX = width / 2;
+        posY = height / 2;
+        await skyrim.mouse.moveTo(posX, posY);
+      }
       await skyrim.keyboard.sendKey(value, 100);
       console.log("sending " + value);
     }
@@ -81,7 +86,7 @@ async function arduinoIn(value) {
         await skyrim.mouse.click("left", 100);
       }
       else if (value === "rclick") {
-        await skyrim.mouse.click("right", 100);
+        await skyrim.mouse.click("right", 500);
       }
     }
     else if (value[0] === 'z') {

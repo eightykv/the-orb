@@ -65,25 +65,30 @@ void processLR(float quatJ, float quatK) {
   // if quatJ is positive, negative quatK is right, positive quatK is left
   if (quatK < 0 && quatK < (0 - lr_threshold) && moving_lr != 1) {
     Serial.println("d1");
+    Serial.println("a0");
     moving_lr = 1;
   }
   if (quatK < 0 && quatK >= (0 - lr_threshold) && moving_lr != 0) {
     Serial.println("d0");
+    Serial.println("a0");
     moving_lr = 0;
   }
   // if quatJ is positive, negative quatK is right, positive quatK is left
   if (quatK > 0 && quatK > lr_threshold && moving_lr != -1) {
     Serial.println("a1");
+    Serial.println("d0");
     moving_lr = -1;
   }
   if (quatK > 0 && quatK <= lr_threshold && moving_lr != 0) {
     Serial.println("a0");
+    Serial.println("d0");
     moving_lr = 0;
   }
 
-  if (quatK > lr_threshold || quatK < 0 - lr_threshold) {
+  if ((quatK > 0 && quatK < lr_threshold) && (quatK < 0 && quatK > 0 - lr_threshold) && moving_lr != 0) {
     Serial.println("a0");
     Serial.println("d0");
+    moving_lr = 0;
   }
 }
 
@@ -92,19 +97,23 @@ void processLook(float quatJ, float quatI) {
     quatI = 0 - quatI;
   }
   
-  if (quatI < look_threshold_slow && quatI > 0 - look_threshold_slow) {
+  if (quatI < look_threshold_lr && quatI > 0 - look_threshold_lr) {
     looking_lr = 0;
   }
-  else if (quatI < 0 - look_threshold_fast) {
+  else if (quatI < 0 - look_threshold_lr) {
+    if (camera_mode == 1) {
       looking_lr = 2;
-  }
-  else if (quatI < 0 - look_threshold_slow) {
+    }
+    else {
       looking_lr = 1;
+    }
   }
-  else if (quatI > look_threshold_fast) {
-    looking_lr = -2;
-  }
-  else if (quatI > look_threshold_slow) {
-    looking_lr = -1;
+  else if (quatI > look_threshold_lr) {
+    if (camera_mode == 1) {
+      looking_lr = -2;
+    }
+    else {
+      looking_lr = -1;
+    }
   }
 }
