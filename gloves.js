@@ -21,9 +21,6 @@ let moving_fb = 0, moving_lr = 0, move_dir = 0, strafe_dir = 0, leaning = 0;
 let last_i, last_m, last_r, last_p, last_x = 0, last_y = 0, last_a = 0;
 let start_x = 0, start_y = 0, start_y1 = 0, start_y2 = 0, start_y3 = 0, start_z = 0, start_z1 = 0, start_z2 = 0;
 let action = false;
-let last_data = '';
-let look_promise = false;
-let look_promise1 = false;
 
 const game = new Hardware("Dishonored");
 SerialPort.list().then(function (ports) {
@@ -295,10 +292,7 @@ async function processLook() {
     }
     if (Math.abs(diff) > 2) {
       changed = true;
-      posX += diff * 6;
-      //if (!util.inspect(look_promise1).includes("pending")) {
-      //  look_promise1 = game.mouse.humanMoveTo(posX, posY, 1, 0);
-      //}
+      posX += diff * 8;
       start_x = x;
     }
 
@@ -312,17 +306,15 @@ async function processLook() {
       if (posY > height) {
         posY = height;
       }
-      //look_promise = game.mouse.humanMoveTo(posX, posY, 10, 0);
       start_y2 = y;
     }
 
     if (changed) {
-      //console.log("move to " + posX + ", " + posY);
       await Actionify.mouse.move(posX, posY, {
-        motion: "linear",
+        motion: "linear", //TODO try arc
         delay: 80,
         steps: "auto"
-      }); //look_promise = game.mouse.humanMoveTo(posX, posY, 15, 0);
+      }); 
     }
   }
 }
