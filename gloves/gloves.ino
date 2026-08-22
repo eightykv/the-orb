@@ -28,8 +28,6 @@ double p_diff = 30;                 // Pinky needs a lower diff in my experience
 boolean calibrate;                  // Indicates to run the calibration routine (true in the beginning)
 double i_cal, m_cal, r_cal, p_cal;  // The calibrated, baseline values of each sensor
 double i, m, r, p, i_bin, m_bin, r_bin, p_bin = 0;  // Needed for multistep processing
-int count = 100; // Clock (I should really change this)
-
 // Output data
 byte output_table[4] = {0x00, 0x10, 0x20, 0x30};
 int x_out, y_out, z_out;
@@ -46,9 +44,8 @@ void setup() {
     while(1);
   }
   else {
-    Serial.println("setup bno");
+    Serial.println("BNO setup complete");
   }
-
   bno.setExtCrystalUse(true);  
 
   // Give it a minute to resolve
@@ -68,10 +65,10 @@ void setup() {
 
 void loop() {
   // Get a new sensor event
-  if(count % 2 == 0) {
-    bno.getEvent(&event);
-    lin_accel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
-  }
+  //if(count % 2 == 0) {
+  bno.getEvent(&event);
+  lin_accel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+  //}
 
   // Process linear acceleration data
   l_x = abs(lin_accel.x());
@@ -157,13 +154,13 @@ void loop() {
   sprintf(output_arr, "%03d %04d %04d %d %d %d %d %d %d", x_out, y_out, z_out, i_flag, m_flag, r_flag, p_flag, at_flag, v_flag);
   Serial.println(output_arr);
   
-  count = count + 1;
-  delay(20);
+  delay(100);
 }
 
 
 // Calibration routine -- average current values for 1s
 void cal(double* calVal) {
+  Serial.println("Calibrating flex sensors...");
   for (int j = 0; j < 100; j++ ) {
     i_cal = (i_cal + analogRead(A0))/2;
     m_cal = (m_cal + analogRead(A1))/2;
@@ -172,4 +169,5 @@ void cal(double* calVal) {
     delay(10);
   }
   calibrate = false;
+  Serial.println("Finished calibration");
 }

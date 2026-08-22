@@ -1,6 +1,8 @@
 {
   "dependencies": {
+    "@lucyus/actionify": "^0.18.2",
     "keysender": "^2.4.0",
     "serialport": "^13.0.0"
-  }
+  },
+  "type": "commonjs"
 }
