@@ -228,10 +228,11 @@ void processBNO() {
     }
     last_z_accel = z_accel;
     
-    if (y_accel < -7.0 && last_y_accel > -7.0 && 
+    if (y_accel > 12.0 && last_y_accel < 12.0 && 
         (millis() - quicksave_clock >= btn_debounce) &&
         (millis() - jump_clock >= jump_delay) &&
-        (millis() - any_piezo_clock >= btn_debounce)) {
+        (millis() - any_piezo_clock >= btn_debounce) &&
+        jumping) {
       Serial.println("escape");
       quicksave_clock = millis();
     }
