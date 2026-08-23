@@ -1,26 +1,26 @@
 const { SerialPort, ReadlineParser } = require('serialport');
-const { util } = require('util');
 const { Hardware, GlobalHotkey } = require('keysender');
 const { Actionify } = require("@lucyus/actionify");
+
 let sp_connected = false;
 let serialport;
 let parser;
+
 let width, height;
 let posX, posY;
 let ready = false;
 
-/* 
- * x    y   z    i m r p a v
- * 039 -014 0034 0 0 0 0 0 1
- * 
- * 
- */
-
+// helper variables
 let x, y, z, i, m, r, p, a, t = 0, u = 0;
 let moving_fb = 0, moving_lr = 0, move_dir = 0, strafe_dir = 0, leaning = 0;
 let last_i, last_m, last_r, last_p, last_x = 0, last_y = 0, last_a = 0;
 let start_x = 0, start_y = 0, start_y1 = 0, start_y2 = 0, start_y3 = 0, start_z = 0, start_z1 = 0, start_z2 = 0;
 let action = false;
+
+// timing
+let click_count = 0;
+let click_timeout;
+let clicking = false;
 
 const game = new Hardware("Dishonored");
 SerialPort.list().then(function (ports) {
@@ -80,6 +80,7 @@ async function arduinoIn(value) {
     processLeftRight();
     processAction();
     processSave();
+    processClick();
 
     if (a && !last_a) {
       last_a = a;
@@ -107,7 +108,6 @@ async function arduinoIn(value) {
 async function processForwardBack() {
   if (i) {
     if (!last_i) {
-      console.log("start");
       start_y = y;
       move_dir = 0;
     }
@@ -155,14 +155,13 @@ async function processForwardBack() {
 async function processLeftRight() {
   if (i) {
     if (!last_i) {
-      console.log("start strafe");
       start_z = z;
       strafe_dir = 0;
     }
 
     let diff = z - start_z;
 
-    if (diff < -16 && moving_lr === 0/* && strafe_dir >= 0*/) {
+    if (diff < -24 && moving_lr === 0/* && strafe_dir >= 0*/) {
       console.log("moving r");
       await game.keyboard.toggleKey('e', true);
       strafe_dir = 1;
@@ -173,7 +172,7 @@ async function processLeftRight() {
       await game.keyboard.toggleKey('e', false);
       moving_lr = 0;
     }
-    else if (diff > 16 && moving_lr === 0/* && strafe_dir <= 0*/) {
+    else if (diff > 24 && moving_lr === 0/* && strafe_dir <= 0*/) {
       console.log("moving l");
       await game.keyboard.toggleKey('a', true);
       strafe_dir = -1;
@@ -227,13 +226,13 @@ async function processAction() {
 
     diff = start_z1 - z;
     if (leaning === 0) {
-      if (diff > 16) {
+      if (diff > 24) {
         console.log("lean r");
         await game.keyboard.toggleKey('.', true);
         leaning = 1;
         start_z1 = z;
       }
-      else if (diff < -16) {
+      else if (diff < -24) {
         console.log("lean l");
         await game.keyboard.toggleKey('\'', true);
         leaning = -1;
@@ -268,31 +267,21 @@ async function processAction() {
 }
 
 async function processLook() {
-  if (t === 2 && !m && !r) {
-    let diff = x - last_x;
-    if (Math.abs(diff) > 100) {
-      return;
-    }
-    if (Math.abs(diff) > 4) {
-      posX += diff;
-      game.mouse.moveTo(posX, posY);
-    }
-  }
-  else if (m) {
-    if (m && !last_m) {
+  if (m) {
+    if (!last_m) {
       start_x = x;
       start_y2 = y;
     }
 
     let diff = x - start_x;
     let changed = false;
-    if (Math.abs(diff) > 100) {
+    if (Math.abs(diff) > 300) {
       start_x = x;
       return;
     }
     if (Math.abs(diff) > 2) {
       changed = true;
-      posX += diff * 8;
+      posX += diff * 4;
       start_x = x;
     }
 
@@ -311,15 +300,13 @@ async function processLook() {
 
     if (changed) {
       await Actionify.mouse.move(posX, posY, {
-        motion: "linear", //TODO try arc
+        motion: "linear", // or linear
         delay: 80,
         steps: "auto"
       }); 
     }
   }
 }
-
-setTimeout(begin, 5000);
 
 async function processSave() {
   if (p) {
@@ -354,3 +341,26 @@ async function processSave() {
     }
   }
 }
+
+function processClick() {
+  if (p && !last_p) {
+    click_count++;
+    setTimeout(checkClick, 800);
+  }
+  if (!p && last_p && clicking) {
+    Actionify.mouse.right.up();
+    console.log("finish rclick");
+    clicking = false;
+  }
+}
+
+function checkClick() {
+  if (click_count > 1 && !clicking) {
+    clicking = true;
+    console.log("rclick");
+    Actionify.mouse.right.down();
+  }
+  click_count = 0;
+}
+
+setTimeout(begin, 5000);
