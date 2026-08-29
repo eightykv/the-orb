@@ -44,10 +44,7 @@ async function begin() {
   console.log(view);
   width = view.width;
   height = view.height;
-  // track where the mouse currently is. Move to the center of the screen
-  posX = width / 2;
-  posY = height / 2;
-  Actionify.mouse.move(posX, posY);
+  moveToZero();
   console.log("moved mouse to " + posX + ", " + posY);
   ready = true;
   console.log("ready");
@@ -282,6 +279,10 @@ async function processLook() {
     if (Math.abs(diff) > 2) {
       changed = true;
       posX += diff * 4;
+      if (posX < 0 || posX > width) {
+        posX = width / 2;
+        Actionify.mouse.move(posX, posY);
+      }
       start_x = x;
     }
 
@@ -299,9 +300,10 @@ async function processLook() {
     }
 
     if (changed) {
+      console.log(posX + ", " + posY);
       await Actionify.mouse.move(posX, posY, {
         motion: "linear", // or linear
-        delay: 80,
+        delay: 160,
         steps: "auto"
       }); 
     }
@@ -321,7 +323,9 @@ async function processSave() {
     if (!action) {
       if (diff < -16) {
         console.log("esc");
+        await game.keyboard.sendKey("7");
         await game.keyboard.sendKey("escape");
+        moveToZero();
         action = true;
         return;
       }
@@ -334,20 +338,29 @@ async function processSave() {
 
       diff = start_z2 - z;
       if (diff > 16) {
+        console.log("takedown");
+        await game.keyboard.toggleKey("lCtrl", true);
+        action = true;
+      }
+
+      if (diff < -16) {
         console.log("quickload");
         await game.keyboard.sendKey("f9");
         action = true;
       }
     }
   }
+  else if (!p && last_p) {
+    await game.keyboard.toggleKey("lCtrl", false);
+  }
 }
 
 function processClick() {
-  if (p && !last_p) {
+  if (r && !last_r) {
     click_count++;
     setTimeout(checkClick, 800);
   }
-  if (!p && last_p && clicking) {
+  if (!r && last_r && clicking) {
     Actionify.mouse.right.up();
     console.log("finish rclick");
     clicking = false;
@@ -361,6 +374,12 @@ function checkClick() {
     Actionify.mouse.right.down();
   }
   click_count = 0;
+}
+
+function moveToZero() {
+  posX = width / 2;
+  posY = height / 2;
+  Actionify.mouse.move(posX, posY);
 }
 
 setTimeout(begin, 5000);
