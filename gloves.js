@@ -16,10 +16,10 @@ let moving_fb = 0, moving_lr = 0, move_dir = 0, strafe_dir = 0, leaning = 0;
 let last_i, last_m, last_r, last_p, last_x = 0, last_y = 0, last_a = 0;
 let start_x = 0, start_y = 0, start_y1 = 0, start_y2 = 0, start_y3 = 0, start_z = 0, start_z1 = 0, start_z2 = 0;
 let action = false;
+let equipment = 7, equip_x = 0;
 
 // timing
 let click_count = 0;
-let click_timeout;
 let clicking = false;
 
 const game = new Hardware("Dishonored");
@@ -78,6 +78,7 @@ async function arduinoIn(value) {
     processAction();
     processSave();
     processClick();
+    processChangeEquipment();
 
     if (a && !last_a) {
       last_a = a;
@@ -268,42 +269,81 @@ async function processLook() {
     if (!last_m) {
       start_x = x;
       start_y2 = y;
-    }
 
-    let diff = x - start_x;
+      if (t === 2) {
+        console.log("slow look");
+      }
+    }
     let changed = false;
-    if (Math.abs(diff) > 300) {
-      start_x = x;
-      return;
-    }
-    if (Math.abs(diff) > 2) {
-      changed = true;
-      posX += diff * 4;
-      if (posX < 0 || posX > width) {
-        posX = width / 2;
-        Actionify.mouse.move(posX, posY);
-      }
-      start_x = x;
-    }
 
-    diff = y - start_y2;
-    if (Math.abs(diff) > 2 && !i) {
-      changed = true;
-      posY -= diff;
-      if (posY < 0) {
-        posY = 0;
+    if (t === 2) {
+      let diff = x - start_x;
+      if (Math.abs(diff) > 300) {
+        start_x = x;
+        return;
       }
-      if (posY > height) {
-        posY = height;
+      if (diff != 0) {
+        changed = true;
+        if (diff > 0) {
+          posX++;
+        }
+        else {
+          posX--;
+        }
+        if (posX < 0 || posX > width) {
+          posX = width / 2;
+          Actionify.mouse.move(posX, posY);
+        }
+        start_x = x;
       }
-      start_y2 = y;
+
+      diff = y - start_y2;
+      if (diff != 0) {
+        changed = true;
+        if (diff > 0) {
+          posY--;
+        }
+        else {
+          posY++;
+        }
+        start_y2 = y;
+      }
+    }
+    else {
+      let diff = x - start_x;
+      if (Math.abs(diff) > 300) {
+        start_x = x;
+        return;
+      }
+      if (Math.abs(diff) > 2) {
+        changed = true;
+        posX += diff * 4;
+        if (posX < 0 || posX > width) {
+          posX = width / 2;
+          Actionify.mouse.move(posX, posY);
+        }
+        start_x = x;
+      }
+
+      diff = y - start_y2;
+      if (Math.abs(diff) > 2 && !i) {
+        changed = true;
+        posY -= diff;
+        if (posY < 0) {
+          posY = 0;
+        }
+        if (posY > height) {
+          posY = height;
+        }
+        start_y2 = y;
+      }
     }
 
     if (changed) {
       console.log(posX + ", " + posY);
       await Actionify.mouse.move(posX, posY, {
         motion: "linear", // or linear
-        delay: 160,
+        delay: 80,
         steps: "auto"
       }); 
     }
@@ -323,7 +363,6 @@ async function processSave() {
     if (!action) {
       if (diff < -16) {
         console.log("esc");
-        await game.keyboard.sendKey("7");
         await game.keyboard.sendKey("escape");
         moveToZero();
         action = true;
@@ -369,11 +408,47 @@ function processClick() {
 
 function checkClick() {
   if (click_count > 1 && !clicking) {
-    clicking = true;
-    console.log("rclick");
-    Actionify.mouse.right.down();
+    if (t === 0) {
+      console.log("lclick");
+      Actionify.mouse.left.click();
+    }
+    else {
+      clicking = true;
+      console.log("rclick");
+      Actionify.mouse.right.down();
+    }
   }
   click_count = 0;
+}
+
+async function processChangeEquipment() {
+  if (p) {
+    if (!last_p) {
+      equip_x = x;
+    }
+
+    let diff = x - equip_x;
+    let changed = false;
+    if (diff > 32) {
+      equipment++;
+      equip_x = x;
+      changed = true;
+    }
+    else if (diff < -32) {
+      equipment--;
+      equip_x = x;
+      changed = true;
+    }
+
+    if (changed) {
+      // make sure we don't go out of bounds
+      equipment = equipment < 0 ? 9 : equipment;
+      equipment = equipment > 9 ? 0 : equipment;
+
+      console.log(equipment);
+      await game.keyboard.sendKey(String(equipment));
+    }
+  }
 }
 
 function moveToZero() {
