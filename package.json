@@ -1,7 +1,10 @@
 {
   "dependencies": {
     "@lucyus/actionify": "^0.18.2",
+    "global-mouse-events": "^1.2.0",
+    "keypress": "^0.2.1",
     "keysender": "^2.4.0",
+    "node-global-key-listener": "^0.3.0",
     "serialport": "^13.0.0"
   },
   "type": "commonjs"
