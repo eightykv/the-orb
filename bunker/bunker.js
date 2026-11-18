@@ -1,23 +1,25 @@
 const { SerialPort, ReadlineParser } = require('serialport');
 const { Hardware, GlobalHotkey } = require('keysender');
 const MouseEvents = require("global-mouse-events");
-/*
- * Fear level 0: normal gameplay
- * Fear level 1: random input delay up to 0.5s; might move mouse slightly; might randomly crouch
- * Fear level 2: might ignore inputs; might move mouse significantly; might randomly crouch or sprint
- * Spike: might start shooting, might sprint in a random direction, might freeze
- * 
- * Icewater overrides, but can only move (sprint) and use items
- */
 
-let sp_connected = false;
-let serialport;
-let parser;
+/**********************************************************
+ * Web server stuff (for OBS)
+ *********************************************************/
+const http = require('http');
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end(heartrate);
+});
+const port = 3000;
+const host = 'localhost';
+server.listen(port, host, () => {
+    console.log(`Server running at http://${host}:${port}/`);
+});
 
-let width, height;
-let heartrate;
-let thresholds = [80, 100, 110]; // guess
-let move = {
+/**********************************************************
+ * Key remapping stuff
+ *********************************************************/
+const move = {
   ",": {
     out: "m",
     type: "move f"
@@ -33,7 +35,11 @@ let move = {
   "e": {
     out: "z",
     type: "move r"
-  },
+  }
+};
+const move_keys = move.keys();
+
+const control = {
   "j": {
     out: "d",
     type: "crouch"
@@ -49,9 +55,33 @@ let move = {
   ".": {
     out: "n",
     type: "lean r"
-  },
-};
+  }
+}
+const mouse_remap = ["l", "r"];
+const game = new Hardware("Amnesia: The Bunker");
+/*
+ * Fear level 0: normal gameplay
+ * Fear level 1: random input delay up to 0.5s; might move mouse slightly; might randomly crouch
+ * Fear level 2: might ignore inputs; might move mouse significantly; might randomly crouch or sprint
+ * Spike: might start shooting, might sprint in a random direction, might freeze
+ * 
+ * Icewater overrides, but can only move (sprint) and use items
+ */
 
+let sp_connected = false;
+let serialport;
+let parser;
+
+let width, height;
+let heartrate = 75;
+let heartrate_history = [];
+let thresholds = [90, 110]; // guess
+let override = false;
+let override_moves = "";
+let spike = false;
+
+/********** MOVE **********/
+// , (forward)
 new GlobalHotkey({
   key: ",",
   mode: "hold",
@@ -63,7 +93,7 @@ new GlobalHotkey({
     processMove(",", false);
   },
 });
-
+// o (back)
 new GlobalHotkey({
   key: "o",
   mode: "hold",
@@ -75,7 +105,7 @@ new GlobalHotkey({
     processMove("o", false);
   },
 });
-
+//a (left)
 new GlobalHotkey({
   key: "a",
   mode: "hold",
@@ -87,7 +117,7 @@ new GlobalHotkey({
     processMove("a", false);
   },
 });
-
+//e (right)
 new GlobalHotkey({
   key: "e",
   mode: "hold",
@@ -100,80 +130,105 @@ new GlobalHotkey({
   },
 });
 
+/********** CONTROL **********/
+// j (crouch)
 new GlobalHotkey({
   key: "j",
   mode: "once",
   action() {
-    processMove("j", true);
+    processControl("j", true);
     return true;
   },
   after() {
-    processMove("j", false);
+    processControl("j", false);
   },
 });
-
+// k (sprint)
 new GlobalHotkey({
   key: "k",
   mode: "once",
   action() {
-    processMove("k", true);
+    processControl("k", true);
     return true;
   },
   after() {
-    processMove("k", false);
+    processControl("k", false);
   },
 });
-
+// ' (lean L)
 new GlobalHotkey({
   key: "'",
   mode: "once",
   action() {
-    processMove("'", true);
+    processControl("'", true);
     return true;
   },
   after() {
-    processMove("'", false);
+    processControl("'", false);
   },
 });
-
+// . (lean R)
 new GlobalHotkey({
   key: ".",
   mode: "once",
   action() {
-    processMove(".", true);
+    processControl(".", true);
     return true;
   },
   after() {
-    processMove(".", false);
+    processControl(".", false);
   },
 });
 
+/********** MOUSE **********/
+// l (left click)
+MouseEvents.on("mousedown", event => {
+  processMouse(event.button - 1, 1);
+});
+// r (right click)
+MouseEvents.on("mouseup", event => {
+  processMouse(event.button - 1, 0);
+});
+
 function processMove(key_name, val) {
-  console.log(key_name);
-  let move_info = move[key_name];
-  game.keyboard.toggleKey(move_info.out, val);
+  if (override || heartrate < thresholds[0]) {
+    let move_info = move[key_name];
+    game.keyboard.toggleKey(move_info.out, val);
+  }
+  else if (heartrate <= thresholds[1]) {
+
+  }
+  else if (heartrate > thresholds[1]) {
+
+  }
 }
 
-MouseEvents.on("mousedown", event => {
-  processMouse(event.button, 1);
-});
+function processControl(key_name, val) {
+  if (override || heartrate < thresholds[0]) {
+    let control_info = control[key_name];
+    game.keyboard.toggleKey(control_info.out, val);
+  }
+  else if (heartrate <= thresholds[1]) {
 
-MouseEvents.on("mouseup", event => {
-  processMouse(event.button, 0);
-});
+  }
+  else if (heartrate > thresholds[1]) {
+    
+  }
+}
 
 function processMouse(button, val) {
-  if (button === 1) {
-    console.log("mouse");
+  if (override || heartrate < thresholds[0]) {
+    game.keyboard.toggleKey(mouse_remap[button], val);
   }
-  else if (button == 2) {
+  else if (heartrate <= thresholds[1]) {
 
+  }
+  else if (heartrate > thresholds[1]) {
+    
   }
 }
 
-const game = new Hardware("Amnesia: The Bunker");
 function begin() {
-  console.log("begin. game: " + JSON.stringify(game));
   if (game.workwindow.isOpen() && game.workwindow.isForeground()) {
     let view = game.workwindow.getView();
     console.log("Game detected. Aspect ratio: " + view.width + " x " + view.height);
@@ -204,14 +259,54 @@ SerialPort.list().then(function (ports) {
 });
 
 async function arduinoIn(value) {
-  value = value.trim();
+  value = value.trim().split("|");
 
   if (!ready) {
     console.log(value);
     return;
   }
 
-  
+  heartrate = value[0];
+  processHeartrate(heartrate);
+
+  override = value[1];
+  override_moves = value[2];
+  if (!override) return;
+
+  for (let i = 0; i < move_keys.length; i++) {
+    if (override_moves.indexOf(move_keys[i]) > -1) {
+      processMove(move_keys[i], true);
+    }
+    else {
+      processMove(move_keys[i], false);
+    }
+  }
+}
+
+function processHeartrate(heartrate) {
+  heartrate_history.push(heartrate);
+  if (heartrate_history.length === 3) {
+    let history_el = heartrate_history.shift();
+    let avg = (heartrate_history[0] + heartrate_history[1]) / 2;
+    if (avg - history_el > 15) {
+      console.log("HEARTRATE SPIKE");
+      spike = true;
+    }
+    else {
+      spike = false;
+    }
+  }
+
+  if (heartrate < thresholds[0] && heartrate_history[0] > thresholds[0]) {
+    console.log("LEVEL 0");
+  }
+  if (heartrate > thresholds[0] && heartrate < thresholds[1] && 
+      (heartrate_history[0] < thresholds[0] || heartrate_history[0] > thresholds[1])) {
+    console.log("LEVEL 1");
+  }
+  if (heartrate > thresholds[1] && heartrate_history[0] < thresholds[1]) {
+    console.log("LEVEL 2");
+  }
 }
 
 setTimeout(begin, 5000);
