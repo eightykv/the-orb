@@ -1,6 +1,14 @@
 const { SerialPort, ReadlineParser } = require('serialport');
 const { Hardware, GlobalHotkey } = require('keysender');
 const MouseEvents = require("global-mouse-events");
+/*
+ * Fear level 0: normal gameplay
+ * Fear level 1: random input delay up to 0.5s; might move mouse slightly; might randomly crouch
+ * Fear level 2: might ignore inputs; might move mouse significantly; might randomly crouch or sprint
+ * Spike: might start shooting, might sprint in a random direction, might freeze
+ * 
+ * Icewater overrides, but can only move (sprint) and use items
+ */
 
 /**********************************************************
  * Web server stuff (for OBS)
@@ -37,8 +45,6 @@ const move = {
     type: "move r"
   }
 };
-const move_keys = move.keys();
-
 const control = {
   "j": {
     out: "d",
@@ -57,16 +63,10 @@ const control = {
     type: "lean r"
   }
 }
-const mouse_remap = ["l", "r"];
+const move_keys = move.keys();
+const control_keys = control.keys();
+const mouse_keys = ["l", "r"];
 const game = new Hardware("Amnesia: The Bunker");
-/*
- * Fear level 0: normal gameplay
- * Fear level 1: random input delay up to 0.5s; might move mouse slightly; might randomly crouch
- * Fear level 2: might ignore inputs; might move mouse significantly; might randomly crouch or sprint
- * Spike: might start shooting, might sprint in a random direction, might freeze
- * 
- * Icewater overrides, but can only move (sprint) and use items
- */
 
 let sp_connected = false;
 let serialport;
@@ -79,6 +79,7 @@ let thresholds = [90, 110]; // guess
 let override = false;
 let override_moves = "";
 let spike = false;
+let spike_int;
 
 /********** MOVE **********/
 // , (forward)
@@ -191,6 +192,9 @@ MouseEvents.on("mouseup", event => {
 });
 
 function processMove(key_name, val) {
+  // spike interrupts all processes
+  if (spike) return;
+
   if (override || heartrate < thresholds[0]) {
     let move_info = move[key_name];
     game.keyboard.toggleKey(move_info.out, val);
@@ -204,7 +208,10 @@ function processMove(key_name, val) {
 }
 
 function processControl(key_name, val) {
-  if (override || heartrate < thresholds[0]) {
+  // During override we can only move and interact
+  if (spike || override) return;
+
+  if (heartrate < thresholds[0]) {
     let control_info = control[key_name];
     game.keyboard.toggleKey(control_info.out, val);
   }
@@ -217,8 +224,11 @@ function processControl(key_name, val) {
 }
 
 function processMouse(button, val) {
+  // spike interrupts all processes
+  if (spike) return;
+
   if (override || heartrate < thresholds[0]) {
-    game.keyboard.toggleKey(mouse_remap[button], val);
+    game.keyboard.toggleKey(mouse_keys[button], val);
   }
   else if (heartrate <= thresholds[1]) {
 
@@ -226,6 +236,45 @@ function processMouse(button, val) {
   else if (heartrate > thresholds[1]) {
     
   }
+}
+
+function endAllActions() {
+  for (let i = 0; i < move_keys; i++) {
+    game.keyboard.toggleKey(move[move_keys[i]].out, false);
+  }
+  for (let i = 0; i < control_keys; i++) {
+    game.keyboard.toggleKey(control[control_keys[i]].out, false);
+  }
+  for (let i = 0; i < mouse_keys; i++) {
+    game.keyboard.toggleKey(mouse_keys[i], false);
+  }
+}
+
+function processSpike() {
+  // stop whatever we're doing
+  endAllActions();
+
+  rand = Math.random();
+  // start swinging
+  if (rand < 0.33) {
+    console.log("FRANTIC PUNCHING");
+    //spike_int = setInterval(() => { game.keyboard.sendKey("l") }, 200);
+  }
+  // run
+  else if (rand < 0.67) {
+    console.log("RUNNING");
+    game.keyboard.toggleKey("m", true);
+  }
+  // frozen
+  else {
+    console.log("FROZEN");
+    return;
+  }
+}
+
+function endSpike() {
+  game.keyboard.toggleKey("m", false);
+  if (spike_int) clearInterval(spike_int);
 }
 
 function begin() {
@@ -291,9 +340,10 @@ function processHeartrate(heartrate) {
     if (avg - history_el > 15) {
       console.log("HEARTRATE SPIKE");
       spike = true;
-    }
-    else {
-      spike = false;
+      processSpike();
+
+      // end spike after 1S
+      setTimeout(endSpike, 1000);
     }
   }
 
